@@ -23,6 +23,7 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"strconv"
 
 	"github.com/alecthomas/kingpin/v2"
 	"github.com/mdlayher/wifi"
@@ -40,6 +41,7 @@ type wifiCollector struct {
 	stationReceiveBytesTotal       *prometheus.Desc
 	stationTransmitBytesTotal      *prometheus.Desc
 	stationSignalDBM               *prometheus.Desc
+	stationChainSignalDBM          *prometheus.Desc
 	stationTransmitRetriesTotal    *prometheus.Desc
 	stationTransmitFailedTotal     *prometheus.Desc
 	stationBeaconLossTotal         *prometheus.Desc
@@ -138,6 +140,13 @@ func NewWifiCollector(logger *slog.Logger) (Collector, error) {
 			prometheus.BuildFQName(namespace, subsystem, "station_signal_dbm"),
 			"The current WiFi signal strength, in decibel-milliwatts (dBm).",
 			labels,
+			nil,
+		),
+
+		stationChainSignalDBM: prometheus.NewDesc(
+			prometheus.BuildFQName(namespace, subsystem, "station_chain_signal_dbm"),
+			"The current WiFi signal strength of each antenna chain, in decibel-milliwatts (dBm).",
+			[]string{"device", "mac_address", "chain"},
 			nil,
 		),
 
@@ -317,6 +326,17 @@ func (c *wifiCollector) updateStationStats(ch chan<- prometheus.Metric, device s
 		device,
 		info.HardwareAddr.String(),
 	)
+
+	for chain, signal := range info.ChainSignal {
+		ch <- prometheus.MustNewConstMetric(
+			c.stationChainSignalDBM,
+			prometheus.GaugeValue,
+			float64(signal),
+			device,
+			info.HardwareAddr.String(),
+			strconv.Itoa(chain),
+		)
+	}
 
 	ch <- prometheus.MustNewConstMetric(
 		c.stationTransmitRetriesTotal,
